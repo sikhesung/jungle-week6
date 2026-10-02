@@ -51,12 +51,12 @@ static void init_sampler()
 {
     if (values)
 	free(values);
-    values = calloc(kbest, sizeof(double));
+    values = calloc(kbest, sizeof(double)); //만약 values라면 벨류를 메모리에 반환하고 초기화한다 kbest의 개수만큼 연속적으로 할당하고 모든공간을 초기화한다.
 #if KEEP_SAMPLES
     if (samples)
 	free(samples);
     /* Allocate extra for wraparound analysis */
-    samples = calloc(maxsamples+kbest, sizeof(double));
+    samples = calloc(maxsamples+kbest, sizeof(double)); //만약 samples이라면 벨류를 메모리에 반환하고 초기화한다 maxsamples+kbest의 개수만큼 연속적으로 할당하고 모든공간을 초기화한다.
 #endif
     samplecount = 0;
 }
@@ -69,21 +69,21 @@ static void add_sample(double val)
     int pos = 0;
     if (samplecount < kbest) {
 	pos = samplecount;
-	values[pos] = val;
+	values[pos] = val; //pos에 0을 넣는다 그리고 만약 samplecount가 kbest보다 작을시 pos에 samplecount를 넣는다 그리고 벨류안에 val에들어 있는 값을 values[pos]에 넣는다
     } else if (val < values[kbest-1]) {
 	pos = kbest-1;
-	values[pos] = val;
+	values[pos] = val; //만약 val 이 values[kbest-1]보다 작을시 pos에 kbest-1한 값을 넣는다 그리고 벨류안에 val안에 들어 있는값을 values[pos]에 넣는다
     }
 #if KEEP_SAMPLES
     samples[samplecount] = val;
 #endif
     samplecount++;
     /* Insertion sort */
-    while (pos > 0 && values[pos-1] > values[pos]) {
-	double temp = values[pos-1];
-	values[pos-1] = values[pos];
-	values[pos] = temp;
-	pos--;
+    while (pos > 0 && values[pos-1] > values[pos]) {//pos와 values[pos-1]의 값이 values[pos]보다 클때까지 반복한다 
+	double temp = values[pos-1];//더블속성에 temp안에 values[pos-1]의 값을 넣는다
+	values[pos-1] = values[pos];//values[pos-1] 안에 values[pos]의 값을 넣는다
+	values[pos] = temp;//values[pos] 안에 temp의 값을 넣는다
+	pos--; //pos 의 값을 1만큼 감소시킨다
     }
 }
 
@@ -93,34 +93,34 @@ static void add_sample(double val)
 static int has_converged()
 {
     return
-	(samplecount >= kbest) &&
+	(samplecount >= kbest) && //samplecount 이 kbest보다 크거나 같을때 그리고 (1 + epsilon)*values[0]의 값이 values[kbest-1]보다 크거나 같을때 has_converged에 리턴한다
 	((1 + epsilon)*values[0] >= values[kbest-1]);
 }
 
 /* 
  * clear - Code to clear cache 
  */
-static volatile int sink = 0;
+static volatile int sink = 0; // volatile(컴파일러의 최적화를 방지하고 변수의 메모리 가시성을 보장하기 위해 사용한다) int타입에 sink를 0으로 지정해서 만든다
 
 static void clear()
 {
-    int x = sink;
-    int *cptr, *cend;
-    int incr = cache_block/sizeof(int);
-    if (!cache_buf) {
+    int x = sink; //x안에 sink값을 넣는다
+    int *cptr, *cend; //int 속성 포인터를 만든다
+    int incr = cache_block/sizeof(int); //int 속성 incr 안에 cache_block/sizeof(int)의 값을 넣는다
+    if (!cache_buf) { //만약 !cache_buf(캐시 재확인 명령어)일시 cache_buf안에 malloc(cache_bytes)만큼에 메모리를 할당한다
 	cache_buf = malloc(cache_bytes);
-	if (!cache_buf) {
-	    fprintf(stderr, "Fatal error.  Malloc returned null when trying to clear cache\n");
-	    exit(1);
+	if (!cache_buf) { //만약 !cache_buf(캐시 재확인 명령어)일시
+	    fprintf(stderr, "Fatal error.  Malloc returned null when trying to clear cache\n");// 프린트한다 Fatal error.  Malloc returned null when trying to clear cache 문장을 출력한다
+	    exit(1); //강제 종료 시킨다
 	}
     }
-    cptr = (int *) cache_buf;
-    cend = cptr + cache_bytes/sizeof(int);
-    while (cptr < cend) {
-	x += *cptr;
-	cptr += incr;
+    cptr = (int *) cache_buf; //cptr안에 인트속성 포인터 cache_buf의 주소값을 넣는다
+    cend = cptr + cache_bytes/sizeof(int); //cend 안에 cptr + cache_bytes/sizeof(int)의 값을 넣는다
+    while (cptr < cend) { //만약 cptr보다 cend가 클시
+	x += *cptr; // x 에 포인터cptr의 값을 더한다
+	cptr += incr; //cptr 과 incr를 더한다
     }
-    sink = x;
+    sink = x; //sink에 x의 값을 넣는다
 }
 
 /*
