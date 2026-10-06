@@ -110,3 +110,145 @@ static void *find_fit(size_t asize)
     }
     return NULL;
 }
+
+static void place(void *bp, size_t asize)
+{
+    size_t csize = GET_SIZE(HDRP(bp));
+    size_t psize;
+    psize = csize - asize;
+
+    if(2 * DSIZE <=psize){
+        PUT(HDRP(bp) , PACK(asize,1));
+        PUT(FTRP(bp) , PACK(asize,1));
+
+        bp = NEXT_BLKP(bp);
+        PUT(HDRP(bp) , PACK(psize,0));
+        PUT(FTRP(bp) , PACK(psize,0));
+    }
+    else{
+        PUT(HDRP(bp) , PACK(csize,1));
+        PUT(FTRP(bp) , PACK(csize,1));
+    }
+}
+
+static void *extend_heap(size_t words)
+{
+    char *bp;
+    size_t size;
+
+    if(words % 2 == 0){
+    size = words * WSIZE;
+    }
+
+    else if(words % 2 == 1) {
+        words = words + 1;
+        size = words * WSIZE;
+    }
+
+    bp = mem_sbrk(size);
+    
+    if(bp == (void *)-1){
+        return NULL;
+    }
+
+    PUT(HDRP(bp) , PACK(size,0));
+    PUT(FTRP(bp) , PACK(size,0));
+
+    PUT(HDRP(NEXT_BLKP(bp)) , PACK(0,1));
+
+    bp = coalesced(bp);
+
+    return(bp);
+}
+
+void *mm_malloc(size_t size)
+{
+    size_t asize;
+    size_t extendsize;
+    char *bp;
+
+    if (size == 0){
+        return NULL;
+    }
+
+    asize = (size + DSIZE + (DSIZE - 1)) / DSIZE * DSIZE;
+
+    bp = find_fit(asize);
+    if(bp != NULL){
+        place(bp , asize);
+        return bp;
+    }
+
+    asize > CHUNKSIZE ? extendsize = asize : extendsize = CHUNKSIZE;
+
+    bp = extend_heap(extendsize / WSIZE);
+
+    if (bp != NULL){
+    place(bp , asize);
+    return bp;
+    }
+    else if(bp == NULL){
+        return NULL;
+    }
+}
+
+int mm_init(void)
+{
+    char *bp;
+    char *z;
+
+    bp = mem_sbrk(4 * WSIZE);
+    if(bp == (void *)-1){
+        return -1;
+    }
+
+    PUT(bp , 0);
+    PUT(bp + WSIZE ,PACK(DSIZE , 1));
+    PUT(bp + 2 * WSIZE ,PACK(DSIZE , 1));
+    PUT(bp + 3 * WSIZE ,PACK(0 , 1));
+
+    heap_listp = bp + 2 * WSIZE;
+
+    z = extend_heap(CHUNKSIZE / WSIZE);
+
+    if ( z == NULL){
+        return -1;
+    }
+
+    return 0;
+}
+
+void *mm_realloc(void *ptr, size_t size)
+{
+    void *newptr;
+    size_t csize;
+    size_t dsize;
+    size_t copysize;
+    
+    if( ptr == NULL){
+        newptr = mm_malloc(size);
+        return newptr;
+    }
+
+    if (size == 0){
+        mm_free(ptr);
+        return NULL;
+    }
+
+    newptr = mm_malloc(size);
+    if (newptr == NULL){
+        return NULL;
+    }
+
+    csize = GET_SIZE(HDRP(ptr));
+
+    dsize = csize - DSIZE;
+
+    dsize > size ? copysize = size : copysize = dsize;
+
+    memcpy(newptr , ptr , copysize);
+
+    mm_free(ptr);
+
+    return newptr;
+}
