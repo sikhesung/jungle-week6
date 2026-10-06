@@ -35,61 +35,78 @@ team_t team = {
     ""};
 
 /* single word (4) or double word (8) alignment */
-#define ALIGNMENT 8
-
 /* rounds up to the nearest multiple of ALIGNMENT */
-#define ALIGN(size) (((size) + (ALIGNMENT - 1)) & ~0x7)
+#define WSIZE 4
+#define DSIZE 8
+#define CHUNKSIZE (1 << 12)
 
-#define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
 
-/*
- * mm_init - initialize the malloc package.
- */
-int mm_init(void)
+#define PACK(size, alloc) ((size) | (alloc))
+
+#define GET(p) (*(unsigned int *)(p))
+#define PUT(p, val) (*(unsigned int *)(p) = (val))
+
+#define GET_SIZE(p) (GET(p) & ~0x7)
+#define GET_ALLOC(p) (GET(p) & 0x1)
+
+#define HDRP(bp) ((char *)(bp) - WSIZE)
+#define FTRP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE)
+
+#define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)))
+#define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE((char *)(bp) - DSIZE))
+
+
+static void *coalesced(void *bp)
 {
-    return 0;
-}
+    size_t prev_alloc = GET_ALLOC(HDRP(PREV_BLKP(bp)));
+    size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
+    size_t size = GET_SIZE(HDRP(bp));
 
-/*
- * mm_malloc - Allocate a block by incrementing the brk pointer.
- *     Always allocate a block whose size is a multiple of the alignment.
- */
-void *mm_malloc(size_t size)
-{
-    int newsize = ALIGN(size + SIZE_T_SIZE);
-    void *p = mem_sbrk(newsize);
-    if (p == (void *)-1)
-        return NULL;
-    else
-    {
-        *(size_t *)p = size;
-        return (void *)((char *)p + SIZE_T_SIZE);
+    //아래 코드는 !가 없으면 사용중인 영역임을 의미
+    if (prev_alloc && next_alloc) {
+        return bp;
+    }
+
+    else if (prev_alloc && !next_alloc) {
+        size = GET_SIZE(HDRP(bp)) + GET_SIZE(HDRP(NEXT_BLKP(bp)));
+        PUT(HDRP(bp) , PACK(size , 0));
+        PUT(FTRP(bp) , PACK(size , 0));
+        return bp;
+    }
+
+    else if (!prev_alloc && !next_alloc) {
+        size = size + GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(HDRP(NEXT_BLKP(bp)));
+        bp = PREV_BLKP(bp);
+        PUT(HDRP(bp) , PACK(size , 0));
+        PUT(FTRP(bp) , PACK(size , 0));
+        return bp;
+    }
+
+    else if (!prev_alloc && next_alloc) {
+        size = size + GET_SIZE(HDRP(PREV_BLKP(bp)));
+        bp = PREV_BLKP(bp);
+        PUT(HDRP(bp) , PACK(size , 0));
+        PUT(FTRP(bp) , PACK(size , 0));
+        return bp;
     }
 }
 
-/*
- * mm_free - Freeing a block does nothing.
- */
-void mm_free(void *ptr)
+void mm_free(void *bp)
 {
+    size_t size = GET_SIZE(HDRP(bp));
+    PUT(HDRP(bp) , PACK(size,0));
+    PUT(FTRP(bp) , PACK(size,0));
+    coalesced(bp);
 }
 
-/*
- * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
- */
-void *mm_realloc(void *ptr, size_t size)
+static void *find_fit(size_t asize)
 {
-    void *oldptr = ptr;
-    void *newptr;
-    size_t copySize;
+    void *bp;
 
-    newptr = mm_malloc(size);
-    if (newptr == NULL)
-        return NULL;
-    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
-    if (size < copySize)
-        copySize = size;
-    memcpy(newptr, oldptr, copySize);
-    mm_free(oldptr);
-    return newptr;
+    for (bp = NEXT_BLKP(heap_listp);GET_SIZE(HDRP(bp)) != 0; bp = NEXT_BLKP(bp)){
+        if(GET_ALLOC(HDRP(bp)) == 0 && GET_SIZE(HDRP(bp)) >= asize)
+        return bp;
+    }
+    return NULL;
 }
