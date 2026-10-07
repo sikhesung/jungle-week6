@@ -56,6 +56,7 @@ team_t team = {
 #define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)))
 #define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE((char *)(bp) - DSIZE))
 
+static char *heap_listp;
 
 static void *coalesced(void *bp)
 {
@@ -83,7 +84,7 @@ static void *coalesced(void *bp)
         return bp;
     }
 
-    else if (!prev_alloc && next_alloc) {
+    else(!prev_alloc && next_alloc); {
         size = size + GET_SIZE(HDRP(PREV_BLKP(bp)));
         bp = PREV_BLKP(bp);
         PUT(HDRP(bp) , PACK(size , 0));
@@ -179,7 +180,7 @@ void *mm_malloc(size_t size)
         return bp;
     }
 
-    asize > CHUNKSIZE ? extendsize = asize : extendsize = CHUNKSIZE;
+    extendsize = MAX(asize, CHUNKSIZE);
 
     bp = extend_heap(extendsize / WSIZE);
 
@@ -244,7 +245,7 @@ void *mm_realloc(void *ptr, size_t size)
 
     dsize = csize - DSIZE;
 
-    dsize > size ? copysize = size : copysize = dsize;
+    copysize = (dsize > size) ? size : dsize;
 
     memcpy(newptr , ptr , copysize);
 
